@@ -1,47 +1,61 @@
 
 // 📁 src/components/SaveUserForm.jsx
 
-import { useState } from "react";
+import { useActionState } from "react";
 import { saveUserToStore } from "../services/userApi";
 
+// 🧠 Initial state for our form action
+const initialState = {
+    // 👤 Read the initially saved user from localStorage
+    currentUser: JSON.parse(localStorage.getItem("username")) || null,
+    error: ''
+}
+
 function SaveUserForm() {
-    // 👤 Read the initially saved user
-    const [currentUser, setCurrentUser] = useState(() => {
-        return JSON.parse(localStorage.getItem("username")) || null;
-    });
 
-    // ✏️ Controlled input state
-    const [username, setUsername] = useState("");
+    //  ⚛️ React 19: useActionState manages the result of our form action.
 
-    // ⏳ Loading and error states
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState("");
+    // state     → contains the current user and any error
+    // formAction → function React connects to the <form>
+    // isPending  → tells us whether the action is currently running
+    const [state, formAction, isPending] = useActionState(handleSubmit, initialState)
 
-    // 📝 Handle form submission
-    async function handleSubmit(event) {
-        event.preventDefault();
+    /*
+     * ⚛️ React 19 Action
+     *
+     * The Action receives:
+     *
+     * 1️⃣ previousState → the state from the previous submission
+     * 2️⃣ formData      → the values submitted by the form
+     */
+    async function handleSubmit(previousState, formData) {
 
-        const trimmedUsername = username.trim();
-
-        // 🧹 Clear previous error
-        setError("");
-        setIsLoading(true);
+        // 📦 Get the username entered in the form
+        const trimmedUsername = formData.get('newuser').trim();
 
         try {
-            // 💾 Simulate saving to a backend
+            // 💾 Save the username using our existing service
             const savedUser = await saveUserToStore(trimmedUsername);
 
-            // ✅ Update UI with persisted user
-            setCurrentUser(savedUser);
-
-            // 🧹 Clear input after success
-            setUsername("");
+            // ✅ Saving succeeded.
+            //    Return the newly saved user as the new state.
+            return {
+                ...previousState,
+                currentUser: savedUser,
+                error: ''
+            }
         } catch (err) {
-            // ❌ Display the service error
-            setError(err.message);
-        } finally {
-            // ⏳ Stop loading in both outcomes
-            setIsLoading(false);
+            /*
+             * ❌ Saving failed.
+             *
+             * 👤 Keep the previous stored username.
+             * 🚫 Do NOT replace it with the failed username.
+             */
+            return {
+                ...previousState,
+                error: err.message
+            }
+
         }
     }
 
@@ -59,44 +73,50 @@ function SaveUserForm() {
                 {/* 👤 Currently saved username */}
                 <div className="current-user">
                     <span className="current-user-label">Current User</span>
-                    <strong>{currentUser?.currentUser || "Guest"}</strong>
+                    <strong>{state?.currentUser?.currentUser || "Guest"}</strong>
                 </div>
 
-                <form onSubmit={handleSubmit}>
+                {/* ⚛️ React 19: form submission is handled by our Action */}
+                <form action={formAction}>
                     <div className="form-group">
                         <label htmlFor="username">Username</label>
 
+                        {/*
+                         * 📝 We no longer need useState for the input.
+                         *
+                         * 📦 The entered value will be available inside
+                         *    the Action through FormData.
+                         */}
                         <input
                             id="username"
+                            name="newuser"
                             type="text"
-                            value={username}
-                            onChange={(event) => setUsername(event.target.value)}
                             placeholder="Enter a username"
                             required
                             minLength={3}
-                            disabled={isLoading}
+                            disabled={isPending}
                         />
                         <p className="input-hint">
                             Enter at least 3 characters.
                         </p>
                     </div>
 
-                    {/* ❌ Service error */}
-                    {error && (
+                    {/* ❌ Display the error returned by the Action */}
+                    {state?.error && (
                         <p className="error-message" role="alert">
-                            {error}
+                            {state?.error}
                         </p>
                     )}
 
                     <button
                         type="submit"
                         className="submit-button"
-                        disabled={isLoading}
+                        disabled={isPending}
                     >
-                        {isLoading && (
+                        {isPending && (
                             <span className="spinner" aria-hidden="true" />
                         )}
-                        {isLoading ? "Saving..." : "Save Username"}
+                        {isPending ? "Saving..." : "Save Username"}
                     </button>
                 </form>
 
